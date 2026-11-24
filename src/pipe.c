@@ -781,7 +781,8 @@ void pipe_stage_fetch()
     op->instruction = i_cache_read32(pipe.PC, &icache, &is_hit); // 既进行了装入(如果需要),又能确定是否需要访存stall
     if (!is_hit)                                                 // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
     {
-        pipe.d_cache_stall = MEM_ACCESS_COST - 1;
+        pipe.i_cache_stall = MEM_ACCESS_COST - 1;
+        free(op);
         return;
     }
 
