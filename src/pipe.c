@@ -277,6 +277,7 @@ void pipe_stage_mem()
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
             return;
         }
+        break;
     }
     case OP_SW:
     {
