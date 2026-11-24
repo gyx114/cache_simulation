@@ -167,14 +167,12 @@ void pipe_stage_mem()
     uint32_t val = 0;
     if (op->is_mem)
     {
-        if (d_cache_check_hit(op->mem_addr & ~3, &dcache) == -1)
+        int is_hit = 0;
+        val = d_cache_read32(op->mem_addr & ~3, &dcache, &is_hit); // 既进行了装入(如果需要),又能确定是否需要访存stall
+        if (!is_hit)                                               // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
         {
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
             return;
-        }
-        else
-        {
-            val = d_cache_read32(op->mem_addr & ~3, &dcache);
         }
     }
 
@@ -231,6 +229,7 @@ void pipe_stage_mem()
     break;
 
     case OP_SB:
+    {
         switch (op->mem_addr & 3)
         {
         case 0:
@@ -247,19 +246,19 @@ void pipe_stage_mem()
             break;
         }
 
-        if (d_cache_check_hit(op->mem_addr & ~3, &dcache) == -1)
+        int is_hit = 0;
+        d_cache_write32(op->mem_addr & ~3, val, &dcache, &is_hit); // 既进行了装入(如果需要),又能确定是否需要访存stall
+        if (!is_hit)                                               // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
         {
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
             return;
         }
-        else
-        {
-            d_cache_write32(op->mem_addr & ~3, val, &dcache);
-        }
 
         break;
+    }
 
     case OP_SH:
+    {
 #ifdef DEBUG
         printf("SH: addr %08x val %04x old word %08x\n", op->mem_addr, op->mem_value & 0xFFFF, val);
 #endif
@@ -271,29 +270,27 @@ void pipe_stage_mem()
         printf("new word %08x\n", val);
 #endif
 
-        if (d_cache_check_hit(op->mem_addr & ~3, &dcache) == -1)
+        int is_hit = 0;
+        d_cache_write32(op->mem_addr & ~3, val, &dcache, &is_hit); // 既进行了装入(如果需要),又能确定是否需要访存stall
+        if (!is_hit)                                               // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
         {
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
             return;
         }
-        else
-        {
-            d_cache_write32(op->mem_addr & ~3, val, &dcache);
-        }
-        break;
-
+    }
     case OP_SW:
+    {
         val = op->mem_value;
-        if (d_cache_check_hit(op->mem_addr & ~3, &dcache) == -1)
+
+        int is_hit = 0;
+        d_cache_write32(op->mem_addr & ~3, val, &dcache, &is_hit); // 既进行了装入(如果需要),又能确定是否需要访存stall
+        if (!is_hit)                                               // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
         {
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
             return;
         }
-        else
-        {
-            d_cache_write32(op->mem_addr & ~3, val, &dcache);
-        }
         break;
+    }
     }
 
     /* clear stage input and transfer to next stage */
@@ -780,14 +777,12 @@ void pipe_stage_fetch()
     memset(op, 0, sizeof(Pipe_Op));
     op->reg_src1 = op->reg_src2 = op->reg_dst = -1;
 
-    if (i_cache_check_hit(pipe.PC, &icache) == -1)
+    int is_hit = 0;
+    op->instruction = i_cache_read32(pipe.PC, &icache, &is_hit); // 既进行了装入(如果需要),又能确定是否需要访存stall
+    if (!is_hit)                                                 // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
     {
-        pipe.i_cache_stall = MEM_ACCESS_COST - 1;
+        pipe.d_cache_stall = MEM_ACCESS_COST - 1;
         return;
-    }
-    else
-    {
-        op->instruction = i_cache_read32(pipe.PC, &icache);
     }
 
     op->pc = pipe.PC;

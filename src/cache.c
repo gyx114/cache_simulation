@@ -228,14 +228,17 @@ void init_d_cache(d_cache *cache)
 /*-----------------------------------------------------------------
 从i_cache中读32位
 这是一个集成函数，集成了是否命中、未命中时从内存加载、从cache中读取等步骤
+同时还会对传入的is_hit进行修改，以指示是否命中
 最终效果就是读取内存中从address开始的32位
 注意，由于shell.c中保证了对齐，此处不再做对齐操作
 ------------------------------------------------------------------*/
-uint32_t i_cache_read32(uint32_t address, i_cache *cache)
+uint32_t i_cache_read32(uint32_t address, i_cache *cache, int *is_hit)
 {
+    *is_hit = 1;
     int idx_in_group = i_cache_check_hit(address, cache); // 检查hit
     if (idx_in_group == -1)                               // 未命中
     {
+        *is_hit = 0;
         idx_in_group = i_cache_load_memory(address, cache); // 从内存装载
     }
     // 此时cache中已有想要的内容，可以取了
@@ -250,14 +253,17 @@ uint32_t i_cache_read32(uint32_t address, i_cache *cache)
 /*-----------------------------------------------------------------
 从d_cache中读32位
 这是一个集成函数，集成了是否命中、未命中时从内存加载、从cache中读取等步骤
+同时还会对传入的is_hit进行修改，以指示是否命中
 最终效果就是读取内存中从address开始的32位
 注意，由于shell.c中保证了对齐，此处不再做对齐操作
 ------------------------------------------------------------------*/
-uint32_t d_cache_read32(uint32_t address, d_cache *cache)
+uint32_t d_cache_read32(uint32_t address, d_cache *cache, int *is_hit)
 {
+    *is_hit = 1;
     int idx_in_group = d_cache_check_hit(address, cache); // 检查hit
     if (idx_in_group == -1)                               // 未命中
     {
+        *is_hit = 0;
         idx_in_group = d_cache_load_memory(address, cache); // 从内存装载
     }
     // 此时cache中已有想要的内容，可以取了
@@ -272,14 +278,17 @@ uint32_t d_cache_read32(uint32_t address, d_cache *cache)
 /*-----------------------------------------------------------------
 向d_cache中写32位
 这是一个集成函数，集成了是否命中、未命中时从内存加载、向cache中写入等步骤
+同时还会对传入的is_hit进行修改，以指示是否命中
 最终效果就是从将32位写入address（实际写入cache，替换时回写）
 注意，由于shell.c中保证了对齐，此处不再做对齐操作
 ------------------------------------------------------------------*/
-void d_cache_write32(uint32_t address, uint32_t value, d_cache *cache)
+void d_cache_write32(uint32_t address, uint32_t value, d_cache *cache, int *is_hit)
 {
+    *is_hit = 1;
     int idx_in_group = d_cache_check_hit(address, cache); // 检查hit
     if (idx_in_group == -1)                               // 未命中
     {
+        *is_hit = 0;
         idx_in_group = d_cache_load_memory(address, cache); // 从内存装载
     }
     // 此时cache中已有对应块，可以写入了
