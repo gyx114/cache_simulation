@@ -167,7 +167,7 @@ void pipe_stage_mem()
     uint32_t val = 0;
     if (op->is_mem)
     {
-        if (d_cache_check_hit(op->mem_addr & ~3, &icache) == -1)
+        if (d_cache_check_hit(op->mem_addr & ~3, &dcache) == -1)
         {
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
             return;
@@ -247,14 +247,14 @@ void pipe_stage_mem()
             break;
         }
 
-        if (d_cache_check_hit(op->mem_addr & ~3, &icache) == -1)
+        if (d_cache_check_hit(op->mem_addr & ~3, &dcache) == -1)
         {
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
             return;
         }
         else
         {
-            d_cache_write32(op->mem_addr & ~3, &dcache, val);
+            d_cache_write32(op->mem_addr & ~3, val, &dcache);
         }
 
         break;
@@ -271,27 +271,27 @@ void pipe_stage_mem()
         printf("new word %08x\n", val);
 #endif
 
-        if (d_cache_check_hit(op->mem_addr & ~3, &icache) == -1)
+        if (d_cache_check_hit(op->mem_addr & ~3, &dcache) == -1)
         {
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
             return;
         }
         else
         {
-            d_cache_write32(op->mem_addr & ~3, &dcache, val);
+            d_cache_write32(op->mem_addr & ~3, val, &dcache);
         }
         break;
 
     case OP_SW:
         val = op->mem_value;
-        if (d_cache_check_hit(op->mem_addr & ~3, &icache) == -1)
+        if (d_cache_check_hit(op->mem_addr & ~3, &dcache) == -1)
         {
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
             return;
         }
         else
         {
-            d_cache_write32(op->mem_addr & ~3, &dcache, val);
+            d_cache_write32(op->mem_addr & ~3, val, &dcache);
         }
         break;
     }
