@@ -46,16 +46,17 @@ int d_cache_check_hit(uint32_t address, d_cache *cache)
     return line_idx;
 }
 
-// 将拷贝的内存块写入(或替换)到i_cache中
-void i_cache_load_memory_impl(uint32_t address, i_cache *cache, uint8_t *mem_copied)
+// 将拷贝的内存块写入(或替换)到i_cache中,返回写入的cacheline的组内下标
+uint32_t i_cache_load_memory_impl(uint32_t address, i_cache *cache, uint8_t *mem_copied)
 {
+    uint32_t ret = 0;
     // 先检查有没有空闲
     uint32_t group_idx = address >> cache->offset_bits;
     group_idx &= ((1u << cache->group_bits) - 1);
     i_cache_line *cache_group = cache->data[group_idx];
     uint32_t target_tag = address >> (cache->group_bits + cache->offset_bits);
     // 在cache组中遍历，既找空闲，也顺便找lru最大的
-    uint32_t idx_max_lru = 0; /*组中下标*/
+    uint32_t idx_max_lru = 0; /*最大lru的组中下标*/
     uint32_t max_lru = 0;
     bool found_empty = false;
     for (uint32_t i = 0; i < cache->ways; i++)
@@ -64,8 +65,10 @@ void i_cache_load_memory_impl(uint32_t address, i_cache *cache, uint8_t *mem_cop
 
         if (!line->valid) // 当前line空闲
         {
-            if (!found_empty)
+            if (!found_empty) // 且之前没有空闲line
             {
+                // 直接写入当前line
+                ret = i;
                 line->data = mem_copied;
                 line->lru = 0;
                 line->tag = target_tag;
@@ -83,19 +86,23 @@ void i_cache_load_memory_impl(uint32_t address, i_cache *cache, uint8_t *mem_cop
             }
         }
     }
+
     if (!found_empty) // 没找到空闲，只能做lru替换
     {
         i_cache_line *line = cache_group + idx_max_lru;
+        ret = idx_max_lru;
         free(line->data); // 释放原有内存
         line->data = mem_copied;
         line->lru = 0; // 由于遍历时已经对所有way做了lru++,因此这里不用再修改其他way的lru
         line->tag = target_tag;
         line->valid = true;
     }
+
+    return ret;
 }
 
-// 向i_cache中加载address所在的内存块
-void i_cache_load_memory(uint32_t address, i_cache *cache)
+// 向i_cache中加载address所在的内存块，同时返回写入的cacheline的组内下标
+uint32_t i_cache_load_memory(uint32_t address, i_cache *cache)
 {
     uint32_t mem_addr_start = address & ~((1u << cache->offset_bits) - 1);
     uint32_t block_size = 1u << cache->offset_bits;
@@ -106,12 +113,13 @@ void i_cache_load_memory(uint32_t address, i_cache *cache)
         *((uint32_t *)(mem_copied + i)) = mem_read_32(mem_addr_start + i); // 一次拷贝4字节
     }
 
-    i_cache_load_memory_impl(address, cache, mem_copied); // 装入cache
+    return i_cache_load_memory_impl(address, cache, mem_copied); // 装入cache
 }
 
-// 将拷贝的内存块写入(或替换)到d_cache中
-void d_cache_load_memory_impl(uint32_t address, d_cache *cache, uint8_t *mem_copied)
+// 将拷贝的内存块写入(或替换)到d_cache中,返回写入的cacheline的组内下标
+uint32_t d_cache_load_memory_impl(uint32_t address, d_cache *cache, uint8_t *mem_copied)
 {
+    uint32_t ret = 0;
     // 先检查有没有空闲
     uint32_t group_idx = address >> cache->offset_bits;
     group_idx &= ((1u << cache->group_bits) - 1);
@@ -129,6 +137,7 @@ void d_cache_load_memory_impl(uint32_t address, d_cache *cache, uint8_t *mem_cop
         {
             if (!found_empty)
             {
+                ret = i;
                 line->data = mem_copied;
                 line->lru = 0;
                 line->tag = target_tag;
@@ -161,6 +170,7 @@ void d_cache_load_memory_impl(uint32_t address, d_cache *cache, uint8_t *mem_cop
                 mem_write_32(mem_addr_start + i, *((uint32_t *)(line->data + i))); // 一次写4字节
             }
         }
+        ret = idx_max_lru;
         free(line->data); // 释放原有内存
         line->data = mem_copied;
         line->lru = 0; // 由于遍历时已经对所有way做了lru++,因此这里不用再修改其他way的lru
@@ -168,10 +178,11 @@ void d_cache_load_memory_impl(uint32_t address, d_cache *cache, uint8_t *mem_cop
         line->valid = true;
         line->dirty = false;
     }
+    return ret;
 }
 
-// 向d_cache中加载address所在的内存块
-void d_cache_load_memory(uint32_t address, d_cache *cache)
+// 向d_cache中加载address所在的内存块,同时返回写入的cacheline的组内下标
+uint32_t d_cache_load_memory(uint32_t address, d_cache *cache)
 {
     uint32_t mem_addr_start = address & ~((1u << cache->offset_bits) - 1);
     uint32_t block_size = 1u << cache->offset_bits;
@@ -182,7 +193,7 @@ void d_cache_load_memory(uint32_t address, d_cache *cache)
         *((uint32_t *)(mem_copied + i)) = mem_read_32(mem_addr_start + i); // 一次拷贝4字节
     }
 
-    d_cache_load_memory_impl(address, cache, mem_copied); // 装入cache
+    return d_cache_load_memory_impl(address, cache, mem_copied); // 装入cache
 }
 
 // 初始化i_cache
@@ -209,4 +220,19 @@ void init_d_cache(d_cache *cache)
     {
         cache->data[i] = (d_cache_line *)calloc(D_CACHE_WAYS, sizeof(d_cache_line)); // 组内分配每一行，置零
     }
+}
+
+/*-----------------------------------------------------------------
+从i_cache中读32位
+这是一个集成函数，集成了是否命中、未命中时从内存加载、从cache中读取等步骤
+最终效果就是读取内存中从address开始的32位
+------------------------------------------------------------------*/
+uint32_t i_cache_read32(uint32_t address, i_cache *cache)
+{
+    int group_idx = i_cache_check_hit(address, cache); // 检查hit
+    if (group_idx == -1)                               // 未命中
+    {
+        i_cache_load_memory(address, cache); // 从内存装载
+    }
+    // 此时cache中已有
 }
