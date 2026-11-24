@@ -11,18 +11,18 @@ int i_cache_check_hit(uint32_t address, i_cache *cache)
     group_idx &= ((1u << cache->group_bits) - 1);
     i_cache_line *cache_group = cache->data[group_idx];
     // 在cache组中遍历寻找
-    int line_idx = -1;
+    uint32_t target_tag = address >> (cache->group_bits + cache->offset_bits);
+    int idx_in_group = -1;
     for (uint32_t i = 0; i < cache->ways; i++)
     {
         i_cache_line *line = cache_group + i;
-        uint32_t target_tag = address >> (cache->group_bits + cache->offset_bits);
         if (line->valid && line->tag == target_tag)
         {
-            line_idx = i;
+            idx_in_group = i;
             break;
         }
     }
-    return line_idx;
+    return idx_in_group;
 }
 
 // 在d_cache中检查address是否命中,命中返回组中下标，未命中返回-1
@@ -32,18 +32,18 @@ int d_cache_check_hit(uint32_t address, d_cache *cache)
     group_idx &= ((1u << cache->group_bits) - 1);
     d_cache_line *cache_group = cache->data[group_idx];
     // 在cache组中遍历寻找
-    int line_idx = -1;
+    uint32_t target_tag = address >> (cache->group_bits + cache->offset_bits);
+    int idx_in_group = -1;
     for (uint32_t i = 0; i < cache->ways; i++)
     {
         d_cache_line *line = cache_group + i;
-        uint32_t target_tag = address >> (cache->group_bits + cache->offset_bits);
         if (line->valid && line->tag == target_tag)
         {
-            line_idx = i;
+            idx_in_group = i;
             break;
         }
     }
-    return line_idx;
+    return idx_in_group;
 }
 
 // 将拷贝的内存块写入(或替换)到i_cache中,返回写入的cacheline的组内下标
@@ -229,10 +229,16 @@ void init_d_cache(d_cache *cache)
 ------------------------------------------------------------------*/
 uint32_t i_cache_read32(uint32_t address, i_cache *cache)
 {
-    int group_idx = i_cache_check_hit(address, cache); // 检查hit
-    if (group_idx == -1)                               // 未命中
+    int idx_in_group = i_cache_check_hit(address, cache); // 检查hit
+    if (idx_in_group == -1)                               // 未命中
     {
-        i_cache_load_memory(address, cache); // 从内存装载
+        idx_in_group = i_cache_load_memory(address, cache); // 从内存装载
     }
-    // 此时cache中已有
+    // 此时cache中已有想要的内容，可以取了
+    uint32_t group_idx = address >> cache->offset_bits;
+    group_idx &= ((1u << cache->group_bits) - 1);
+    i_cache_line *cache_group = cache->data[group_idx];
+    uint32_t offset_in_line = address & ((1u << cache->offset_bits) - 1);
+
+    return *((uint32_t *)(cache_group[idx_in_group].data + offset_in_line));
 }
