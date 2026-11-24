@@ -6,9 +6,11 @@
 #include <stdlib.h>
 #include <assert.h>
 
-// #define DEBUG
+#include "cache.h"
 
-// #define ENABLE_CACHE
+#define MEM_ACCESS_COST 50
+
+// #define DEBUG
 
 /* debug */
 void print_op(Pipe_Op *op)
@@ -28,6 +30,8 @@ void pipe_init()
 {
     memset(&pipe, 0, sizeof(Pipe_State));
     pipe.PC = 0x00400000;
+    init_i_cache(&icache);
+    init_d_cache(&dcache);
 }
 
 void pipe_cycle()
@@ -147,6 +151,12 @@ void pipe_stage_wb()
 
 void pipe_stage_mem()
 {
+    if (pipe.d_cache_stall) // 等待访存代价结束
+    {
+        pipe.d_cache_stall--;
+        return;
+    }
+
     /* if there is no instruction in this pipeline stage, we are done */
     if (!pipe.mem_op)
         return;
@@ -156,7 +166,17 @@ void pipe_stage_mem()
 
     uint32_t val = 0;
     if (op->is_mem)
-        val = mem_read_32(op->mem_addr & ~3);
+    {
+        if (d_cache_check_hit(op->mem_addr & ~3, &icache) == -1)
+        {
+            pipe.d_cache_stall = MEM_ACCESS_COST - 1;
+            return;
+        }
+        else
+        {
+            val = d_cache_read32(op->mem_addr & ~3, &dcache);
+        }
+    }
 
     switch (op->opcode)
     {
@@ -227,7 +247,16 @@ void pipe_stage_mem()
             break;
         }
 
-        mem_write_32(op->mem_addr & ~3, val);
+        if (d_cache_check_hit(op->mem_addr & ~3, &icache) == -1)
+        {
+            pipe.d_cache_stall = MEM_ACCESS_COST - 1;
+            return;
+        }
+        else
+        {
+            d_cache_write32(op->mem_addr & ~3, &dcache, val);
+        }
+
         break;
 
     case OP_SH:
@@ -242,12 +271,28 @@ void pipe_stage_mem()
         printf("new word %08x\n", val);
 #endif
 
-        mem_write_32(op->mem_addr & ~3, val);
+        if (d_cache_check_hit(op->mem_addr & ~3, &icache) == -1)
+        {
+            pipe.d_cache_stall = MEM_ACCESS_COST - 1;
+            return;
+        }
+        else
+        {
+            d_cache_write32(op->mem_addr & ~3, &dcache, val);
+        }
         break;
 
     case OP_SW:
         val = op->mem_value;
-        mem_write_32(op->mem_addr & ~3, val);
+        if (d_cache_check_hit(op->mem_addr & ~3, &icache) == -1)
+        {
+            pipe.d_cache_stall = MEM_ACCESS_COST - 1;
+            return;
+        }
+        else
+        {
+            d_cache_write32(op->mem_addr & ~3, &dcache, val);
+        }
         break;
     }
 
@@ -720,6 +765,12 @@ void pipe_stage_decode()
 
 void pipe_stage_fetch()
 {
+    if (pipe.i_cache_stall) // 等待取指访存代价结束
+    {
+        pipe.i_cache_stall--;
+        return;
+    }
+
     /* if pipeline is stalled (our output slot is not empty), return */
     if (pipe.decode_op != NULL)
         return;
@@ -729,7 +780,16 @@ void pipe_stage_fetch()
     memset(op, 0, sizeof(Pipe_Op));
     op->reg_src1 = op->reg_src2 = op->reg_dst = -1;
 
-    op->instruction = mem_read_32(pipe.PC);
+    if (i_cache_check_hit(pipe.PC, &icache) == -1)
+    {
+        pipe.i_cache_stall = MEM_ACCESS_COST - 1;
+        return;
+    }
+    else
+    {
+        op->instruction = i_cache_read32(pipe.PC, &icache);
+    }
+
     op->pc = pipe.PC;
     pipe.decode_op = op;
 
