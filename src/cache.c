@@ -226,6 +226,7 @@ void init_d_cache(d_cache *cache)
 从i_cache中读32位
 这是一个集成函数，集成了是否命中、未命中时从内存加载、从cache中读取等步骤
 最终效果就是读取内存中从address开始的32位
+注意，由于shell.c中保证了对齐，此处不再做对齐操作
 ------------------------------------------------------------------*/
 uint32_t i_cache_read32(uint32_t address, i_cache *cache)
 {
@@ -247,6 +248,7 @@ uint32_t i_cache_read32(uint32_t address, i_cache *cache)
 从d_cache中读32位
 这是一个集成函数，集成了是否命中、未命中时从内存加载、从cache中读取等步骤
 最终效果就是读取内存中从address开始的32位
+注意，由于shell.c中保证了对齐，此处不再做对齐操作
 ------------------------------------------------------------------*/
 uint32_t d_cache_read32(uint32_t address, d_cache *cache)
 {
@@ -268,6 +270,7 @@ uint32_t d_cache_read32(uint32_t address, d_cache *cache)
 向d_cache中写32位
 这是一个集成函数，集成了是否命中、未命中时从内存加载、向cache中写入等步骤
 最终效果就是从将32位写入address（实际写入cache，替换时回写）
+注意，由于shell.c中保证了对齐，此处不再做对齐操作
 ------------------------------------------------------------------*/
 void d_cache_write32(uint32_t address, uint32_t value, d_cache *cache)
 {
