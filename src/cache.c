@@ -4,6 +4,9 @@
 #include "cache.h"
 #include "shell.h"
 
+i_cache icache;
+d_cache dcache;
+
 // 在i_cache中检查address是否命中,命中返回组中下标，未命中返回-1
 int i_cache_check_hit(uint32_t address, i_cache *cache)
 {
