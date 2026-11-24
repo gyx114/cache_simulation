@@ -263,3 +263,24 @@ uint32_t d_cache_read32(uint32_t address, d_cache *cache)
 
     return *((uint32_t *)(cache_group[idx_in_group].data + offset_in_line));
 }
+
+/*-----------------------------------------------------------------
+向d_cache中写32位
+这是一个集成函数，集成了是否命中、未命中时从内存加载、向cache中写入等步骤
+最终效果就是从将32位写入address（实际写入cache，替换时回写）
+------------------------------------------------------------------*/
+void d_cache_write32(uint32_t address, uint32_t value, d_cache *cache)
+{
+    int idx_in_group = d_cache_check_hit(address, cache); // 检查hit
+    if (idx_in_group == -1)                               // 未命中
+    {
+        idx_in_group = d_cache_load_memory(address, cache); // 从内存装载
+    }
+    // 此时cache中已有对应块，可以写入了
+    uint32_t group_idx = address >> cache->offset_bits;
+    group_idx &= ((1u << cache->group_bits) - 1);
+    d_cache_line *cache_group = cache->data[group_idx];
+    uint32_t offset_in_line = address & ((1u << cache->offset_bits) - 1);
+    *((uint32_t *)(cache_group[idx_in_group].data + offset_in_line)) = value;
+    cache_group[idx_in_group].dirty = true; // dirty位标记
+}
