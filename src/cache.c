@@ -234,16 +234,24 @@ void init_d_cache(d_cache *cache)
 ------------------------------------------------------------------*/
 uint32_t i_cache_read32(uint32_t address, i_cache *cache, int *is_hit)
 {
+    uint32_t group_idx = address >> cache->offset_bits;
+    group_idx &= ((1u << cache->group_bits) - 1);
     *is_hit = 1;
     int idx_in_group = i_cache_check_hit(address, cache); // 检查hit
     if (idx_in_group == -1)                               // 未命中
     {
         *is_hit = 0;
-        idx_in_group = i_cache_load_memory(address, cache); // 从内存装载
+        idx_in_group = i_cache_load_memory(address, cache); // 从内存装载，同时更新了lru
+    }
+    else // 命中了也得更新lru
+    {
+        for (int i = 0; i < cache->ways; i++)
+        {
+            cache->data[group_idx][i].lru++;
+        }
+        cache->data[group_idx][idx_in_group].lru = 0;
     }
     // 此时cache中已有想要的内容，可以取了
-    uint32_t group_idx = address >> cache->offset_bits;
-    group_idx &= ((1u << cache->group_bits) - 1);
     i_cache_line *cache_group = cache->data[group_idx];
     uint32_t offset_in_line = address & ((1u << cache->offset_bits) - 1);
 
@@ -259,16 +267,24 @@ uint32_t i_cache_read32(uint32_t address, i_cache *cache, int *is_hit)
 ------------------------------------------------------------------*/
 uint32_t d_cache_read32(uint32_t address, d_cache *cache, int *is_hit)
 {
+    uint32_t group_idx = address >> cache->offset_bits;
+    group_idx &= ((1u << cache->group_bits) - 1);
     *is_hit = 1;
     int idx_in_group = d_cache_check_hit(address, cache); // 检查hit
     if (idx_in_group == -1)                               // 未命中
     {
         *is_hit = 0;
-        idx_in_group = d_cache_load_memory(address, cache); // 从内存装载
+        idx_in_group = d_cache_load_memory(address, cache); // 从内存装载,同时更新了lru
+    }
+    else // 命中了也得更新lru
+    {
+        for (int i = 0; i < cache->ways; i++)
+        {
+            cache->data[group_idx][i].lru++;
+        }
+        cache->data[group_idx][idx_in_group].lru = 0;
     }
     // 此时cache中已有想要的内容，可以取了
-    uint32_t group_idx = address >> cache->offset_bits;
-    group_idx &= ((1u << cache->group_bits) - 1);
     d_cache_line *cache_group = cache->data[group_idx];
     uint32_t offset_in_line = address & ((1u << cache->offset_bits) - 1);
 
@@ -284,16 +300,24 @@ uint32_t d_cache_read32(uint32_t address, d_cache *cache, int *is_hit)
 ------------------------------------------------------------------*/
 void d_cache_write32(uint32_t address, uint32_t value, d_cache *cache, int *is_hit)
 {
+    uint32_t group_idx = address >> cache->offset_bits;
+    group_idx &= ((1u << cache->group_bits) - 1);
     *is_hit = 1;
     int idx_in_group = d_cache_check_hit(address, cache); // 检查hit
     if (idx_in_group == -1)                               // 未命中
     {
         *is_hit = 0;
-        idx_in_group = d_cache_load_memory(address, cache); // 从内存装载
+        idx_in_group = d_cache_load_memory(address, cache); // 从内存装载，同时更新了lru
+    }
+    else // 命中了也得更新lru
+    {
+        for (int i = 0; i < cache->ways; i++)
+        {
+            cache->data[group_idx][i].lru++;
+        }
+        cache->data[group_idx][idx_in_group].lru = 0;
     }
     // 此时cache中已有对应块，可以写入了
-    uint32_t group_idx = address >> cache->offset_bits;
-    group_idx &= ((1u << cache->group_bits) - 1);
     d_cache_line *cache_group = cache->data[group_idx];
     uint32_t offset_in_line = address & ((1u << cache->offset_bits) - 1);
     *((uint32_t *)(cache_group[idx_in_group].data + offset_in_line)) = value;
