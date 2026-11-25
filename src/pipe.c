@@ -783,7 +783,7 @@ void pipe_stage_fetch()
     if (!is_hit)                                                 // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
     {
         pipe.i_cache_stall = MEM_ACCESS_COST - 1;
-        free(op);
+        free(op); // 因为判断未命中会进行空转，空转结束后会从头再执行一遍，这会导致op两次分配内存，于是便在未命中时free掉
         return;
     }
 
