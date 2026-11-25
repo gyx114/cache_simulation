@@ -10,7 +10,7 @@
 
 #define MEM_ACCESS_COST 50
 
-#define ENABLE_CACHE
+// #define ENABLE_CACHE
 
 // #define DEBUG
 
@@ -167,13 +167,18 @@ void pipe_stage_mem()
     Pipe_Op *op = pipe.mem_op;
 
     uint32_t val = 0;
-    if (op->is_mem)
+    if (op->is_mem) // 如果是半字读写，需要先读取原字，于是在switch-case前先读一下。同时这次读也会保证cache装入内存
     {
-        int is_hit = 0;
-        val = d_cache_read32(op->mem_addr & ~3, &dcache, &is_hit); // 既进行了装入(如果需要),又能确定是否需要访存stall
-        if (!is_hit)                                               // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
+        static int is_hit_mem = 0;
+#ifdef ENABLE_CACHE
+        val = d_cache_read32(op->mem_addr & ~3, &dcache, &is_hit_mem); // 既进行了装入(如果需要),又能确定是否需要访存stall
+#else
+        val = mem_read_32(op->mem_addr & ~3);
+#endif
+        if (!is_hit_mem) // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
         {
             pipe.d_cache_stall = MEM_ACCESS_COST - 1;
+            is_hit_mem = 1;
             return;
         }
     }
@@ -248,19 +253,11 @@ void pipe_stage_mem()
             break;
         }
 
-        static int is_hit_sb = 0;
 #ifdef ENABLE_CACHE
         d_cache_write32(op->mem_addr & ~3, val, &dcache, &is_hit_sb); // 既进行了装入(如果需要),又能确定是否需要访存stall
 #else
-        if (is_hit_sb)
-            mem_write_32(op->mem_addr & ~3, val);
+        mem_write_32(op->mem_addr & ~3, val);
 #endif
-        if (!is_hit_sb) // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
-        {
-            pipe.d_cache_stall = MEM_ACCESS_COST - 1;
-            is_hit_sb = 1;
-            return;
-        }
 
         break;
     }
@@ -282,15 +279,9 @@ void pipe_stage_mem()
 #ifdef ENABLE_CACHE
         d_cache_write32(op->mem_addr & ~3, val, &dcache, &is_hit_sh); // 既进行了装入(如果需要),又能确定是否需要访存stall
 #else
-        if (is_hit_sh)
-            mem_write_32(op->mem_addr & ~3, val);
+        mem_write_32(op->mem_addr & ~3, val);
 #endif
-        if (!is_hit_sh) // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
-        {
-            pipe.d_cache_stall = MEM_ACCESS_COST - 1;
-            is_hit_sh = 1;
-            return;
-        }
+
         break;
     }
     case OP_SW:
@@ -301,15 +292,9 @@ void pipe_stage_mem()
 #ifdef ENABLE_CACHE
         d_cache_write32(op->mem_addr & ~3, val, &dcache, &is_hit_sw); // 既进行了装入(如果需要),又能确定是否需要访存stall
 #else
-        if (is_hit_sw)
-            mem_write_32(op->mem_addr & ~3, val);
+        mem_write_32(op->mem_addr & ~3, val);
 #endif
-        if (!is_hit_sw) // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
-        {
-            pipe.d_cache_stall = MEM_ACCESS_COST - 1;
-            is_hit_sw = 1;
-            return;
-        }
+
         break;
     }
     }
@@ -798,18 +783,18 @@ void pipe_stage_fetch()
     memset(op, 0, sizeof(Pipe_Op));
     op->reg_src1 = op->reg_src2 = op->reg_dst = -1;
 
-    static int is_hit = 0;
+    static int is_hit_fetch = 0;
 #ifdef ENABLE_CACHE
-    op->instruction = i_cache_read32(pipe.PC, &icache, &is_hit); // 既进行了装入(如果需要),又能确定是否需要访存stall
+    op->instruction = i_cache_read32(pipe.PC, &icache, &is_hit_fetch); // 既进行了装入(如果需要),又能确定是否需要访存stall
 #else
-    if (is_hit)
+    if (is_hit_fetch)
         op->instruction = mem_read_32(pipe.PC);
 #endif
-    if (!is_hit) // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
+    if (!is_hit_fetch) // 没命中，需要访存stall，由于之前已经装入，50周期空转之后可以正常恢复执行
     {
         pipe.i_cache_stall = MEM_ACCESS_COST - 1;
         free(op); // 因为判断未命中会进行空转，空转结束后会从头再执行一遍，这会导致op两次分配内存，于是便在未命中时free掉
-        is_hit = 1;
+        is_hit_fetch = 1;
         return;
     }
 
