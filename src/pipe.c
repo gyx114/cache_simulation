@@ -10,7 +10,7 @@
 
 #define MEM_ACCESS_COST 50
 
-// #define ENABLE_CACHE
+#define ENABLE_CACHE
 
 // #define DEBUG
 
@@ -181,6 +181,7 @@ void pipe_stage_mem()
             is_hit_mem = 1;
             return;
         }
+        is_hit_mem = 0; // 由于is_hit是静态本地变量，只能初始化一次，必须在结束时再次置零，否则后面无论如何都是1，不会触发惩罚
     }
 
     switch (op->opcode)
@@ -254,11 +255,10 @@ void pipe_stage_mem()
         }
 
 #ifdef ENABLE_CACHE
-        d_cache_write32(op->mem_addr & ~3, val, &dcache, &is_hit_sb); // 既进行了装入(如果需要),又能确定是否需要访存stall
+        d_cache_write32(op->mem_addr & ~3, val, &dcache, NULL);
 #else
         mem_write_32(op->mem_addr & ~3, val);
 #endif
-
         break;
     }
 
@@ -275,26 +275,22 @@ void pipe_stage_mem()
         printf("new word %08x\n", val);
 #endif
 
-        static int is_hit_sh = 0;
 #ifdef ENABLE_CACHE
-        d_cache_write32(op->mem_addr & ~3, val, &dcache, &is_hit_sh); // 既进行了装入(如果需要),又能确定是否需要访存stall
+        d_cache_write32(op->mem_addr & ~3, val, &dcache, NULL);
 #else
         mem_write_32(op->mem_addr & ~3, val);
 #endif
-
         break;
     }
     case OP_SW:
     {
         val = op->mem_value;
 
-        static int is_hit_sw = 0;
 #ifdef ENABLE_CACHE
-        d_cache_write32(op->mem_addr & ~3, val, &dcache, &is_hit_sw); // 既进行了装入(如果需要),又能确定是否需要访存stall
+        d_cache_write32(op->mem_addr & ~3, val, &dcache, NULL);
 #else
         mem_write_32(op->mem_addr & ~3, val);
 #endif
-
         break;
     }
     }
@@ -805,4 +801,6 @@ void pipe_stage_fetch()
     pipe.PC += 4;
 
     stat_inst_fetch++;
+
+    is_hit_fetch = 0; // 由于is_hit是静态本地变量，只能初始化一次，必须在结束时再次置零，否则后面无论如何都是1，不会触发惩罚
 }
