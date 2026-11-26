@@ -8,7 +8,7 @@
 
 #include "cache.h"
 
-#define MEM_ACCESS_COST 50
+#define MEM_ACCESS_COST 51
 
 #define ENABLE_CACHE
 
