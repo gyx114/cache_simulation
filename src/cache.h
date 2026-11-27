@@ -10,8 +10,8 @@
 #define I_CACHE_OFFSET_BITS 5
 
 /*d_cache参数*/
-#define D_CACHE_GROUP_BITS 8
-#define D_CACHE_WAYS 1
+#define D_CACHE_GROUP_BITS 7
+#define D_CACHE_WAYS 16
 #define D_CACHE_OFFSET_BITS 5
 
 typedef struct i_cache_line

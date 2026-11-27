@@ -19,3 +19,11 @@ test17,results/test17.txt,/home/guany/jidao_tests/lab4/inputs/cache/conflict.x,6
 test18,results/test18.txt,/home/guany/jidao_tests/lab4/inputs/cache/conflict.x,6,4,5,8,16,5
 test19,results/test19.txt,/home/guany/jidao_tests/lab4/inputs/cache/conflict.x,6,4,5,8,4,5
 test20,results/test20.txt,/home/guany/jidao_tests/lab4/inputs/cache/conflict.x,6,4,5,8,1,5
+test21,results/test21.txt,/home/guany/jidao_tests/lab4/inputs/cache/streaming.x,6,4,5,8,8,5
+test22,results/test22.txt,/home/guany/jidao_tests/lab4/inputs/cache/streaming.x,5,8,5,8,8,5
+test23,results/test23.txt,/home/guany/jidao_tests/lab4/inputs/cache/streaming.x,7,2,5,8,8,5
+test24,results/test24.txt,/home/guany/jidao_tests/lab4/inputs/cache/streaming.x,8,1,5,8,8,5
+test25,results/test25.txt,/home/guany/jidao_tests/lab4/inputs/cache/streaming.x,6,4,5,11,1,5
+test26,results/test26.txt,/home/guany/jidao_tests/lab4/inputs/cache/streaming.x,6,4,5,10,2,5
+test27,results/test27.txt,/home/guany/jidao_tests/lab4/inputs/cache/streaming.x,6,4,5,9,4,5
+test28,results/test28.txt,/home/guany/jidao_tests/lab4/inputs/cache/streaming.x,6,4,5,7,16,5
