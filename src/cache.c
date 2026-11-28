@@ -58,9 +58,9 @@ uint32_t i_cache_load_memory_impl(uint32_t address, i_cache *cache, uint8_t *mem
     group_idx &= ((1u << cache->group_bits) - 1);
     i_cache_line *cache_group = cache->data[group_idx];
     uint32_t target_tag = address >> (cache->group_bits + cache->offset_bits);
-    // 在cache组中遍历，既找空闲，也顺便找lru最大的
-    uint32_t idx_max_lru = 0; /*最大lru的组中下标*/
-    uint32_t max_lru = 0;
+    // 在cache组中遍历，既找空闲，也顺便找counter最大的
+    uint32_t idx_max_counter = 0; /*最大counter的组中下标*/
+    uint32_t max_counter = 0;
     bool found_empty = false;
     for (uint32_t i = 0; i < cache->ways; i++)
     {
@@ -73,7 +73,7 @@ uint32_t i_cache_load_memory_impl(uint32_t address, i_cache *cache, uint8_t *mem
                 // 直接写入当前line
                 ret = i;
                 line->data = mem_copied;
-                line->lru = 0;
+                line->counter = 0;
                 line->tag = target_tag;
                 line->valid = true;
                 found_empty = true;
@@ -81,22 +81,22 @@ uint32_t i_cache_load_memory_impl(uint32_t address, i_cache *cache, uint8_t *mem
         }
         else
         {
-            line->lru++;             // 顺便更新lru
-            if (line->lru > max_lru) // 找max_lru
+            line->counter++;                 // 顺便更新counter
+            if (line->counter > max_counter) // 找max_counter
             {
-                max_lru = line->lru;
-                idx_max_lru = i;
+                max_counter = line->counter;
+                idx_max_counter = i;
             }
         }
     }
 
-    if (!found_empty) // 没找到空闲，只能做lru替换
+    if (!found_empty) // 没找到空闲，只能做替换
     {
-        i_cache_line *line = cache_group + idx_max_lru;
-        ret = idx_max_lru;
+        i_cache_line *line = cache_group + idx_max_counter;
+        ret = idx_max_counter;
         free(line->data); // 释放原有内存
         line->data = mem_copied;
-        line->lru = 0; // 由于遍历时已经对所有way做了lru++,因此这里不用再修改其他way的lru
+        line->counter = 0; // 由于遍历时已经对所有way做了counter++,因此这里不用再修改其他way的counter
         line->tag = target_tag;
         line->valid = true;
     }
@@ -128,9 +128,9 @@ uint32_t d_cache_load_memory_impl(uint32_t address, d_cache *cache, uint8_t *mem
     group_idx &= ((1u << cache->group_bits) - 1);
     d_cache_line *cache_group = cache->data[group_idx];
     uint32_t target_tag = address >> (cache->group_bits + cache->offset_bits);
-    // 在cache组中遍历，既找空闲，也顺便找lru最大的
-    uint32_t idx_max_lru = 0; /*组中下标*/
-    uint32_t max_lru = 0;
+    // 在cache组中遍历，既找空闲，也顺便找counter最大的
+    uint32_t idx_max_counter = 0; /*组中下标*/
+    uint32_t max_counter = 0;
     bool found_empty = false;
     for (uint32_t i = 0; i < cache->ways; i++)
     {
@@ -142,7 +142,7 @@ uint32_t d_cache_load_memory_impl(uint32_t address, d_cache *cache, uint8_t *mem
             {
                 ret = i;
                 line->data = mem_copied;
-                line->lru = 0;
+                line->counter = 0;
                 line->tag = target_tag;
                 line->valid = true;
                 line->dirty = false;
@@ -151,17 +151,17 @@ uint32_t d_cache_load_memory_impl(uint32_t address, d_cache *cache, uint8_t *mem
         }
         else
         {
-            line->lru++;             // 顺便更新lru
-            if (line->lru > max_lru) // 找max_lru
+            line->counter++;                 // 顺便更新counter
+            if (line->counter > max_counter) // 找max_counter
             {
-                max_lru = line->lru;
-                idx_max_lru = i;
+                max_counter = line->counter;
+                idx_max_counter = i;
             }
         }
     }
-    if (!found_empty) // 没找到空闲，只能做lru替换
+    if (!found_empty) // 没找到空闲，只能做替换
     {
-        d_cache_line *line = cache_group + idx_max_lru;
+        d_cache_line *line = cache_group + idx_max_counter;
 
         // d_cache有dirty位，需要判断是否需要写回内存
         if (line->dirty) // 需要写回
@@ -173,10 +173,10 @@ uint32_t d_cache_load_memory_impl(uint32_t address, d_cache *cache, uint8_t *mem
                 mem_write_32(mem_addr_start + i, *((uint32_t *)(line->data + i))); // 一次写4字节
             }
         }
-        ret = idx_max_lru;
+        ret = idx_max_counter;
         free(line->data); // 释放原有内存
         line->data = mem_copied;
-        line->lru = 0; // 由于遍历时已经对所有way做了lru++,因此这里不用再修改其他way的lru
+        line->counter = 0; // 由于遍历时已经对所有way做了counter++,因此这里不用再修改其他way的counter
         line->tag = target_tag;
         line->valid = true;
         line->dirty = false;
@@ -243,16 +243,23 @@ uint32_t i_cache_read32(uint32_t address, i_cache *cache, int *is_hit)
     {
         if (is_hit != NULL)
             *is_hit = 0;
-        idx_in_group = i_cache_load_memory(address, cache); // 从内存装载，同时更新了lru
+        idx_in_group = i_cache_load_memory(address, cache); // 从内存装载，同时更新了counter
     }
-    else // 命中了也得更新lru
+
+#if REPLACE == REPLACE_LRU
+    else // 对于lru策略，命中了也得更新counter
     {
         for (int i = 0; i < cache->ways; i++)
         {
-            cache->data[group_idx][i].lru++;
+            cache->data[group_idx][i].counter++;
         }
-        cache->data[group_idx][idx_in_group].lru = 0;
+        cache->data[group_idx][idx_in_group].counter = 0;
     }
+
+#elif REPLACE == REPLACE_FIFO
+    // fifo在命中时不会更新计数器
+#endif
+
     // 此时cache中已有想要的内容，可以取了
     i_cache_line *cache_group = cache->data[group_idx];
     uint32_t offset_in_line = address & ((1u << cache->offset_bits) - 1);
@@ -278,16 +285,22 @@ uint32_t d_cache_read32(uint32_t address, d_cache *cache, int *is_hit)
     {
         if (is_hit != NULL)
             *is_hit = 0;
-        idx_in_group = d_cache_load_memory(address, cache); // 从内存装载,同时更新了lru
+        idx_in_group = d_cache_load_memory(address, cache); // 从内存装载,同时更新了counter
     }
-    else // 命中了也得更新lru
+
+#if REPLACE == REPLACE_LRU
+    else // 对于lru策略，命中了也得更新counter
     {
         for (int i = 0; i < cache->ways; i++)
         {
-            cache->data[group_idx][i].lru++;
+            cache->data[group_idx][i].counter++;
         }
-        cache->data[group_idx][idx_in_group].lru = 0;
+        cache->data[group_idx][idx_in_group].counter = 0;
     }
+#elif REPLACE == REPLACE_FIFO
+    // fifo命中时不用更新计数器
+#endif
+
     // 此时cache中已有想要的内容，可以取了
     d_cache_line *cache_group = cache->data[group_idx];
     uint32_t offset_in_line = address & ((1u << cache->offset_bits) - 1);
@@ -313,16 +326,22 @@ void d_cache_write32(uint32_t address, uint32_t value, d_cache *cache, int *is_h
     {
         if (is_hit != NULL)
             *is_hit = 0;
-        idx_in_group = d_cache_load_memory(address, cache); // 从内存装载，同时更新了lru
+        idx_in_group = d_cache_load_memory(address, cache); // 从内存装载，同时更新了counter
     }
-    else // 命中了也得更新lru
+
+#if REPLACE == REPLACE_LRU
+    else // 对于lru策略，命中了也得更新counter
     {
         for (int i = 0; i < cache->ways; i++)
         {
-            cache->data[group_idx][i].lru++;
+            cache->data[group_idx][i].counter++;
         }
-        cache->data[group_idx][idx_in_group].lru = 0;
+        cache->data[group_idx][idx_in_group].counter = 0;
     }
+#elif REPLACE == REPLACE_FIFO
+    // fifo命中时不用更新计数器
+#endif
+
     // 此时cache中已有对应块，可以写入了
     d_cache_line *cache_group = cache->data[group_idx];
     uint32_t offset_in_line = address & ((1u << cache->offset_bits) - 1);

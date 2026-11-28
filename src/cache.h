@@ -14,11 +14,17 @@
 #define D_CACHE_WAYS 16
 #define D_CACHE_OFFSET_BITS 5
 
+/*替换策略*/
+#define REPLACE_LRU 0
+#define REPLACE_FIFO 1
+
+#define REPLACE REPLACE_FIFO
+
 typedef struct i_cache_line
 {
     bool valid;
-    uint32_t tag; // PC[31:11]
-    uint32_t lru; // lru计数器
+    uint32_t tag;     // PC[31:11]
+    uint32_t counter; // lru计数器，扩展为通用替换策略计数器
     uint8_t *data;
 } i_cache_line;
 
@@ -26,8 +32,8 @@ typedef struct d_cache_line
 {
     bool valid;
     bool dirty;
-    uint32_t tag; // address[31:13]
-    uint32_t lru; // lru计数器
+    uint32_t tag;     // address[31:13]
+    uint32_t counter; // lru计数器，扩展为通用替换策略计数器
     uint8_t *data;
 } d_cache_line;
 
